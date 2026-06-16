@@ -3,18 +3,12 @@ import {
   Injectable,
   InternalServerErrorException,
   UnauthorizedException,
-} from '@nestjs/common';
-import { AuthSession } from '../domain/auth-session';
-import { SignInHandler } from '../use-case/sign-in/sign-in.handler';
-import { SignUpHandler } from '../use-case/sign-up/sign-up.handler';
-import { SignInDto } from './dto/sign-in.dto';
-import { SignUpDto } from './dto/sign-up.dto';
+} from "@nestjs/common";
+import { SignInHandler } from "../use-case/sign-in/sign-in.handler";
+import { SignUpHandler } from "../use-case/sign-up/sign-up.handler";
+import { SignInDtoReq, SignInDtoRes } from "./dto/sign-in.dto";
+import { SignUpDtoReq, SignUpDtoRes } from "./dto/sign-up.dto";
 
-/**
- * The ONLY place in the auth module that knows about HTTP status codes.
- * It translates the use-case's typed error codes into HTTP exceptions
- * (Part 4: "Use-case must not know HTTP statuses").
- */
 @Injectable()
 export class AuthPresentationService {
   constructor(
@@ -22,37 +16,38 @@ export class AuthPresentationService {
     private readonly signInHandler: SignInHandler,
   ) {}
 
-  async signUp(dto: SignUpDto): Promise<AuthSession> {
-    const result = await this.signUpHandler.run(
-      dto.email,
-      dto.password,
-      dto.displayName,
-    );
+  async signUp(dto: SignUpDtoReq): Promise<SignUpDtoRes> {
+    const signUpHandlerResult = await this.signUpHandler.run({
+      email: dto.email,
+      password: dto.password,
+      displayName: dto.displayName,
+    });
 
-    if (result.isErr()) {
-      switch (result.error) {
-        case 'EMAIL_ALREADY_EXISTS':
-          throw new ConflictException('Email is already registered');
-        default:
-          throw new InternalServerErrorException();
+    if (signUpHandlerResult.isErr()) {
+      if (signUpHandlerResult.error === "SIGN_UP_EMAIL_ALREADY_EXISTS") {
+        throw new ConflictException("Email is already registered");
       }
+
+      throw new InternalServerErrorException();
     }
 
-    return result.value;
+    return signUpHandlerResult.value;
   }
 
-  async signIn(dto: SignInDto): Promise<AuthSession> {
-    const result = await this.signInHandler.run(dto.email, dto.password);
+  async signIn(dto: SignInDtoReq): Promise<SignInDtoRes> {
+    const signInHandlerResult = await this.signInHandler.run({
+      email: dto.email,
+      password: dto.password,
+    });
 
-    if (result.isErr()) {
-      switch (result.error) {
-        case 'INVALID_CREDENTIALS':
-          throw new UnauthorizedException('Invalid email or password');
-        default:
-          throw new InternalServerErrorException();
+    if (signInHandlerResult.isErr()) {
+      if (signInHandlerResult.error === "SIGN_IN_INVALID_CREDENTIALS") {
+        throw new UnauthorizedException("Invalid email or password");
       }
+
+      throw new InternalServerErrorException();
     }
 
-    return result.value;
+    return signInHandlerResult.value;
   }
 }

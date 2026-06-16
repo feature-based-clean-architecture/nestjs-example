@@ -1,51 +1,67 @@
-import { Injectable } from '@nestjs/common';
-import { err, ok, Result } from 'neverthrow';
-import { UsersExternalService } from '../../../users/external';
-import { AuthSession } from '../../domain/auth-session';
-import { HashService } from '../../infrastructure/security/hash.service';
-import { TokenService } from '../../infrastructure/security/token.service';
-
-export type SignInError = 'INVALID_CREDENTIALS' | 'PERSISTENCE_ERROR';
+import { Injectable } from "@nestjs/common";
+import { err, fromAsyncThrowable, ok, Result } from "neverthrow";
+import { UsersExternalService } from "../../../users/external";
+import { UseCaseHandler } from "src/lib/use-case/use-case";
+import { SignInErrorErrorCode } from "./sign-in.errors";
+import { HashService } from "src/infrastructure/hash/hash.service";
+import { JwtService } from "@nestjs/jwt";
+import { JWT_CONFIG } from "../../infrastructure/jwt/jwt.config";
+import { SignInParams, SignInResult } from "./sign-in.types";
 
 @Injectable()
-export class SignInHandler {
+export class SignInHandler implements UseCaseHandler<
+  SignInParams,
+  Result<SignInResult, SignInErrorErrorCode>
+> {
   constructor(
-    private readonly usersExternalService: UsersExternalService,
+    private readonly jwtService: JwtService,
     private readonly hashService: HashService,
-    private readonly tokenService: TokenService,
+    private readonly usersExternalService: UsersExternalService,
   ) {}
 
   async run(
-    email: string,
-    password: string,
-  ): Promise<Result<AuthSession, SignInError>> {
-    const found = await this.usersExternalService.getUserByEmail(email);
-    if (found.isErr()) {
-      return err('PERSISTENCE_ERROR');
+    params: SignInParams,
+  ): Promise<Result<SignInResult, SignInErrorErrorCode>> {
+    const getUserByEmailResult = await this.usersExternalService.getUserByEmail(
+      params.email,
+    );
+    if (getUserByEmailResult.isErr()) {
+      return err("SIGN_IN_PERSISTENCE_ERROR");
     }
 
-    const user = found.value;
-    // Same error for "no such email" and "wrong password" — don't leak which
-    // accounts exist.
+    const user = getUserByEmailResult.value;
     if (!user) {
-      return err('INVALID_CREDENTIALS');
+      return err("SIGN_IN_USER_NOT_FOUND");
     }
 
     const verifyResult = await this.hashService.verify(
-      password,
+      params.password,
       user.passwordHash,
     );
-    // A malformed/unverifiable stored hash is treated as a failed login — we
-    // never reveal that the stored credential itself is broken.
-    if (verifyResult.isErr() || !verifyResult.value) {
-      return err('INVALID_CREDENTIALS');
+    if (verifyResult.isErr()) {
+      return err("SIGN_IN_HASH_ERROR");
     }
 
-    const accessToken = await this.tokenService.issue({ userId: user.id });
+    if (!verifyResult.value) {
+      return err("SIGN_IN_INVALID_PASSWORD");
+    }
+
+    const signAccessTokenResult = await fromAsyncThrowable(async () =>
+      this.jwtService.signAsync(params, {
+        secret: JWT_CONFIG.JWT_REFRESH_KEY,
+        expiresIn: JWT_CONFIG.JWT_REFRESH_EXP,
+        algorithm: "HS256",
+      }),
+    )();
+    if (signAccessTokenResult.isErr()) {
+      return err("SIGN_IN_GENERATE_TOKEN_ERROR");
+    }
 
     return ok({
-      accessToken,
-      user: { id: user.id, email: user.email, displayName: user.displayName },
+      id: user.id,
+      email: user.email,
+      displayName: user.displayName,
+      accessToken: signAccessTokenResult.value,
     });
   }
 }

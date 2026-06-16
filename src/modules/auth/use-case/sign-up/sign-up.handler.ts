@@ -1,63 +1,70 @@
-import { Injectable } from '@nestjs/common';
-import { err, ok, Result } from 'neverthrow';
-import { UsersExternalService } from '../../../users/external';
-import { AuthSession } from '../../domain/auth-session';
-import { HashService } from '../../infrastructure/security/hash.service';
-import { TokenService } from '../../infrastructure/security/token.service';
+import { Injectable } from "@nestjs/common";
+import { err, fromAsyncThrowable, ok, Result } from "neverthrow";
+import { UsersExternalService } from "../../../users/external";
+import { HashService } from "src/infrastructure/hash/hash.service";
+import { JwtService } from "@nestjs/jwt";
+import { SignUpErrorCode } from "./sign-up.errors";
+import { UseCaseHandler } from "src/lib/use-case/use-case";
+import { JWT_CONFIG } from "../../infrastructure/jwt/jwt.config";
+import { SignUpParams, SignUpResult } from "./sign-up.types";
 
-export type SignUpError =
-  | 'EMAIL_ALREADY_EXISTS'
-  | 'HASHING_FAILED'
-  | 'PERSISTENCE_ERROR';
-
-/**
- * Cross-module orchestration done right: the auth use-case reaches the users
- * module ONLY through `UsersExternalService` (its port). It has no idea a
- * `UserRepository` or `UserEntity` exists.
- */
 @Injectable()
-export class SignUpHandler {
+export class SignUpHandler implements UseCaseHandler<
+  SignUpParams,
+  Result<SignUpResult, SignUpErrorCode>
+> {
   constructor(
-    private readonly usersExternalService: UsersExternalService,
+    private readonly jwtService: JwtService,
     private readonly hashService: HashService,
-    private readonly tokenService: TokenService,
+    private readonly usersExternalService: UsersExternalService,
   ) {}
 
   async run(
-    email: string,
-    password: string,
-    displayName: string,
-  ): Promise<Result<AuthSession, SignUpError>> {
-    const existing = await this.usersExternalService.getUserByEmail(email);
-    if (existing.isErr()) {
-      return err('PERSISTENCE_ERROR');
+    params: SignUpParams,
+  ): Promise<Result<SignUpResult, SignUpErrorCode>> {
+    const getUserByEmailResult = await this.usersExternalService.getUserByEmail(
+      params.email,
+    );
+
+    if (getUserByEmailResult.isErr()) {
+      return err("SIGN_UP_PERSISTENCE_ERROR");
     }
-    if (existing.value) {
-      return err('EMAIL_ALREADY_EXISTS');
+    if (getUserByEmailResult.value) {
+      return err("SIGN_UP_EMAIL_ALREADY_EXISTS");
     }
 
-    const hashResult = await this.hashService.hash(password);
+    const hashResult = await this.hashService.hash(params.password);
     if (hashResult.isErr()) {
-      // scrypt failed (RNG / key derivation) — an internal infra failure.
-      return err('HASHING_FAILED');
+      return err("SIGN_UP_HASHING_FAILED");
     }
 
-    const created = await this.usersExternalService.createUser({
-      email,
+    const createUserResult = await this.usersExternalService.createUser({
+      email: params.email,
       passwordHash: hashResult.value,
-      displayName,
+      displayName: params.displayName,
     });
-    if (created.isErr()) {
-      // Covers the create-time race where the unique constraint fires.
-      return err(created.error);
+    if (createUserResult.isErr()) {
+      return err("SIGN_UP_PERSISTENCE_ERROR");
     }
 
-    const user = created.value;
-    const accessToken = await this.tokenService.issue({ userId: user.id });
+    const user = createUserResult.value;
+
+    const signAccessTokenResult = await fromAsyncThrowable(async () =>
+      this.jwtService.signAsync(params, {
+        secret: JWT_CONFIG.JWT_REFRESH_KEY,
+        expiresIn: JWT_CONFIG.JWT_REFRESH_EXP,
+        algorithm: "HS256",
+      }),
+    )();
+    if (signAccessTokenResult.isErr()) {
+      return err("SIGN_UP_GENERATE_TOKEN_ERROR");
+    }
 
     return ok({
-      accessToken,
-      user: { id: user.id, email: user.email, displayName: user.displayName },
+      id: user.id,
+      email: user.email,
+      displayName: user.displayName,
+      accessToken: signAccessTokenResult.value,
     });
   }
 }

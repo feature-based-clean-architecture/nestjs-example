@@ -1,50 +1,42 @@
-import {
-  CanActivate,
-  ExecutionContext,
-  Injectable,
-  UnauthorizedException,
-} from '@nestjs/common';
-import { Request } from 'express';
-import { VerifyTokenHandler } from '../../use-case/verify-token/verify-token.handler';
+import { CanActivate, ExecutionContext, Injectable } from "@nestjs/common";
+import { JwtService } from "@nestjs/jwt";
+import { fromAsyncThrowable } from "neverthrow";
+import { JWT_CONFIG } from "../../infrastructure/jwt/jwt.config";
+import { Request } from "express";
+import { JwtPayload } from "../../domain/jwt-payload";
 
-export type AuthenticatedUser = { userId: string };
-
-export interface AuthenticatedRequest extends Request {
-  user?: AuthenticatedUser;
-}
-
-/**
- * Cross-cutting HTTP concern, so it lives in presentation. It delegates the
- * actual token check to the auth module's own use-case (`VerifyTokenHandler`),
- * never to `TokenService` directly — presentation does not reach into
- * infrastructure.
- */
 @Injectable()
-export class JwtAuthGuard implements CanActivate {
-  constructor(private readonly verifyTokenHandler: VerifyTokenHandler) {}
+export class JwtGuard implements CanActivate {
+  constructor(private readonly jwtService: JwtService) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
-    const token = this.extractToken(request);
-    if (!token) {
-      throw new UnauthorizedException('Missing bearer token');
+    const request = context
+      .switchToHttp()
+      .getRequest<Request & { jwt: JwtPayload }>();
+
+    const authorizationHeader = request.headers?.authorization;
+
+    if (!authorizationHeader) {
+      return false;
     }
 
-    const result = await this.verifyTokenHandler.run(token);
-    if (result.isErr()) {
-      throw new UnauthorizedException('Invalid token');
+    const parts = authorizationHeader.split(" ");
+    if (parts[0] !== "Bearer" || !parts[1]) {
+      return false;
     }
 
-    request.user = { userId: result.value.userId };
+    const verifyResult = await fromAsyncThrowable(async () =>
+      this.jwtService.verifyAsync(parts[1], {
+        secret: JWT_CONFIG.JWT_ACCESS_KEY,
+        algorithms: ["HS256"],
+      }),
+    )();
+    if (verifyResult.isErr()) {
+      return false;
+    }
+
+    request.jwt = verifyResult.value;
+
     return true;
-  }
-
-  private extractToken(request: AuthenticatedRequest): string | undefined {
-    const header = request.headers.authorization;
-    if (!header) {
-      return undefined;
-    }
-    const [scheme, value] = header.split(' ');
-    return scheme === 'Bearer' ? value : undefined;
   }
 }

@@ -1,6 +1,10 @@
-import { IsEmail, IsString, MaxLength, MinLength } from 'class-validator';
+import { IsEmail, IsString, MaxLength, MinLength } from "class-validator";
+import {
+  SignUpParams,
+  SignUpResult,
+} from "../../use-case/sign-up/sign-up.types";
 
-export class SignUpDto {
+export class SignUpDtoReq implements SignUpParams {
   @IsEmail()
   email: string;
 
@@ -13,4 +17,11 @@ export class SignUpDto {
   @MinLength(1)
   @MaxLength(80)
   displayName: string;
+}
+
+export class SignUpDtoRes implements SignUpResult {
+  id: string;
+  email: string;
+  displayName: string;
+  accessToken: string;
 }

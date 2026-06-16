@@ -1,11 +1,10 @@
-import { Module } from '@nestjs/common';
-import { UsersExternalModule } from '../../../users/external';
-import { HashModule } from '../../infrastructure/security/hash.module';
-import { TokenModule } from '../../infrastructure/security/token.module';
-import { SignInHandler } from './sign-in.handler';
+import { Module } from "@nestjs/common";
+import { UsersExternalModule } from "../../../users/external";
+import { SignInHandler } from "./sign-in.handler";
+import { HashModule } from "src/infrastructure/hash/hash.module";
 
 @Module({
-  imports: [UsersExternalModule, HashModule, TokenModule],
+  imports: [UsersExternalModule, HashModule],
   providers: [SignInHandler],
   exports: [SignInHandler],
 })
