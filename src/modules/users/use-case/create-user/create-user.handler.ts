@@ -1,27 +1,28 @@
-import { Injectable } from '@nestjs/common';
-import { err, ok, Result } from 'neverthrow';
-import { CreateUserData, User } from '../../domain/user';
-import { UserRepository } from '../../infrastructure/repositories/user.repository';
+import { Injectable } from "@nestjs/common";
+import { err, ok, Result } from "neverthrow";
+import { UseCaseHandler } from "../../../../lib/use-case/use-case";
+import { UserRepository } from "../../infrastructure/repositories/user.repository";
+import { CreateUserErrorCode } from "./create-user.errors";
+import { CreateUserParams, CreateUserResult } from "./create-user.types";
 
-export type CreateUserError = 'EMAIL_ALREADY_EXISTS' | 'PERSISTENCE_ERROR';
-
-/**
- * One handler = one use-case (Part 4). It orchestrates domain + infrastructure
- * and returns a typed Result. It knows nothing about HTTP.
- */
 @Injectable()
-export class CreateUserHandler {
+export class CreateUserHandler
+  implements
+    UseCaseHandler<CreateUserParams, Result<CreateUserResult, CreateUserErrorCode>>
+{
   constructor(private readonly userRepository: UserRepository) {}
 
-  async run(data: CreateUserData): Promise<Result<User, CreateUserError>> {
-    const created = await this.userRepository.create(data);
-
-    if (created.isErr()) {
-      // Repository error codes happen to line up 1:1 here, but the mapping is
-      // explicit on purpose: the use-case owns its own error vocabulary.
-      return err(created.error);
+  async run(
+    params: CreateUserParams,
+  ): Promise<Result<CreateUserResult, CreateUserErrorCode>> {
+    const createUserResult = await this.userRepository.create(params);
+    if (createUserResult.isErr()) {
+      if (createUserResult.error === "EMAIL_ALREADY_EXISTS") {
+        return err("CREATE_USER_EMAIL_ALREADY_EXISTS");
+      }
+      return err("CREATE_USER_PERSISTENCE_ERROR");
     }
 
-    return ok(created.value);
+    return ok(createUserResult.value);
   }
 }

@@ -1,12 +1,12 @@
 import { Injectable } from "@nestjs/common";
 import { err, fromAsyncThrowable, ok, Result } from "neverthrow";
-import { UsersExternalService } from "../../../users/external";
 import { UseCaseHandler } from "../../../../lib/use-case/use-case";
 import { SignInErrorErrorCode } from "./sign-in.errors";
 import { HashService } from "../../../../infrastructure/hash/hash.service";
 import { JwtService } from "@nestjs/jwt";
 import { JWT_CONFIG } from "../../infrastructure/jwt/jwt.config";
 import { SignInParams, SignInResult } from "./sign-in.types";
+import { UsersExternalService } from "src/modules/users/external/users-external.service";
 
 @Injectable()
 export class SignInHandler implements UseCaseHandler<

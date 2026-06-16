@@ -1,12 +1,12 @@
-import { Module } from '@nestjs/common';
-import { FollowsExternalModule } from '../../follows/external';
-import { UsersExternalModule } from '../external';
-import { UsersController } from './users.controller';
-import { UsersPresentationService } from './users-presentation.service';
+import { Module } from "@nestjs/common";
+import { FollowsExternalModule } from "../../follows/external";
+import { UsersPresentationController } from "./users-presentation.controller";
+import { UsersPresentationService } from "./users-presentation.service";
+import { GetUserByIdModule } from "../use-case/get-user-by-id/get-user-by-id.module";
 
 @Module({
-  imports: [UsersExternalModule, FollowsExternalModule],
-  controllers: [UsersController],
+  imports: [GetUserByIdModule, FollowsExternalModule],
+  controllers: [UsersPresentationController],
   providers: [UsersPresentationService],
 })
 export class UsersPresentationModule {}

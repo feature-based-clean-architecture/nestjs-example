@@ -1,18 +1,31 @@
-import { Injectable } from '@nestjs/common';
-import { Result } from 'neverthrow';
-import { User } from '../../domain/user';
+import { Injectable } from "@nestjs/common";
+import { err, ok, Result } from "neverthrow";
+import { UseCaseHandler } from "../../../../lib/use-case/use-case";
+import { UserRepository } from "../../infrastructure/repositories/user.repository";
+import { GetUserByEmailErrorCode } from "./get-user-by-email.errors";
 import {
-  UserRepository,
-  UserRepositoryError,
-} from '../../infrastructure/repositories/user.repository';
-
-export type GetUserByEmailError = UserRepositoryError;
+  GetUserByEmailParams,
+  GetUserByEmailResult,
+} from "./get-user-by-email.types";
 
 @Injectable()
-export class GetUserByEmailHandler {
+export class GetUserByEmailHandler
+  implements
+    UseCaseHandler<
+      GetUserByEmailParams,
+      Result<GetUserByEmailResult, GetUserByEmailErrorCode>
+    >
+{
   constructor(private readonly userRepository: UserRepository) {}
 
-  run(email: string): Promise<Result<User | undefined, GetUserByEmailError>> {
-    return this.userRepository.findByEmail(email);
+  async run(
+    params: GetUserByEmailParams,
+  ): Promise<Result<GetUserByEmailResult, GetUserByEmailErrorCode>> {
+    const findUserResult = await this.userRepository.findByEmail(params.email);
+    if (findUserResult.isErr()) {
+      return err("GET_USER_BY_EMAIL_PERSISTENCE_ERROR");
+    }
+
+    return ok(findUserResult.value);
   }
 }

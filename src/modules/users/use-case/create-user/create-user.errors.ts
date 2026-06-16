@@ -1,0 +1,3 @@
+export type CreateUserErrorCode =
+  | "CREATE_USER_EMAIL_ALREADY_EXISTS"
+  | "CREATE_USER_PERSISTENCE_ERROR";
