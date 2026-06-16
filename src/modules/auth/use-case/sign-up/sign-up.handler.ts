@@ -2,10 +2,13 @@ import { Injectable } from '@nestjs/common';
 import { err, ok, Result } from 'neverthrow';
 import { UsersExternalService } from '../../../users/external';
 import { AuthSession } from '../../domain/auth-session';
-import { PasswordHasher } from '../../infrastructure/security/password-hasher.service';
+import { HashService } from '../../infrastructure/security/hash.service';
 import { TokenService } from '../../infrastructure/security/token.service';
 
-export type SignUpError = 'EMAIL_ALREADY_EXISTS' | 'PERSISTENCE_ERROR';
+export type SignUpError =
+  | 'EMAIL_ALREADY_EXISTS'
+  | 'HASHING_FAILED'
+  | 'PERSISTENCE_ERROR';
 
 /**
  * Cross-module orchestration done right: the auth use-case reaches the users
@@ -16,7 +19,7 @@ export type SignUpError = 'EMAIL_ALREADY_EXISTS' | 'PERSISTENCE_ERROR';
 export class SignUpHandler {
   constructor(
     private readonly usersExternalService: UsersExternalService,
-    private readonly passwordHasher: PasswordHasher,
+    private readonly hashService: HashService,
     private readonly tokenService: TokenService,
   ) {}
 
@@ -33,11 +36,15 @@ export class SignUpHandler {
       return err('EMAIL_ALREADY_EXISTS');
     }
 
-    const passwordHash = await this.passwordHasher.hash(password);
+    const hashResult = await this.hashService.hash(password);
+    if (hashResult.isErr()) {
+      // scrypt failed (RNG / key derivation) — an internal infra failure.
+      return err('HASHING_FAILED');
+    }
 
     const created = await this.usersExternalService.createUser({
       email,
-      passwordHash,
+      passwordHash: hashResult.value,
       displayName,
     });
     if (created.isErr()) {

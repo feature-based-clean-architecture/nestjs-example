@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { err, ok, Result } from 'neverthrow';
 import { UsersExternalService } from '../../../users/external';
 import { AuthSession } from '../../domain/auth-session';
-import { PasswordHasher } from '../../infrastructure/security/password-hasher.service';
+import { HashService } from '../../infrastructure/security/hash.service';
 import { TokenService } from '../../infrastructure/security/token.service';
 
 export type SignInError = 'INVALID_CREDENTIALS' | 'PERSISTENCE_ERROR';
@@ -11,7 +11,7 @@ export type SignInError = 'INVALID_CREDENTIALS' | 'PERSISTENCE_ERROR';
 export class SignInHandler {
   constructor(
     private readonly usersExternalService: UsersExternalService,
-    private readonly passwordHasher: PasswordHasher,
+    private readonly hashService: HashService,
     private readonly tokenService: TokenService,
   ) {}
 
@@ -31,11 +31,13 @@ export class SignInHandler {
       return err('INVALID_CREDENTIALS');
     }
 
-    const matches = await this.passwordHasher.compare(
+    const verifyResult = await this.hashService.verify(
       password,
       user.passwordHash,
     );
-    if (!matches) {
+    // A malformed/unverifiable stored hash is treated as a failed login — we
+    // never reveal that the stored credential itself is broken.
+    if (verifyResult.isErr() || !verifyResult.value) {
       return err('INVALID_CREDENTIALS');
     }
 
