@@ -41,7 +41,13 @@ export class AuthPresentationService {
     });
 
     if (signInHandlerResult.isErr()) {
-      if (signInHandlerResult.error === "SIGN_IN_INVALID_CREDENTIALS") {
+      // Same response for "no such user" and "wrong password" — don't leak
+      // which accounts exist.
+      if (
+        signInHandlerResult.error === "SIGN_IN_USER_NOT_FOUND" ||
+        signInHandlerResult.error === "SIGN_IN_INVALID_PASSWORD" ||
+        signInHandlerResult.error === "SIGN_IN_INVALID_CREDENTIALS"
+      ) {
         throw new UnauthorizedException("Invalid email or password");
       }
 

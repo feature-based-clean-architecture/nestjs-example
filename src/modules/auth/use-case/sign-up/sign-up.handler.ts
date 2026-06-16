@@ -1,10 +1,10 @@
 import { Injectable } from "@nestjs/common";
 import { err, fromAsyncThrowable, ok, Result } from "neverthrow";
 import { UsersExternalService } from "../../../users/external";
-import { HashService } from "src/infrastructure/hash/hash.service";
+import { HashService } from "../../../../infrastructure/hash/hash.service";
 import { JwtService } from "@nestjs/jwt";
 import { SignUpErrorCode } from "./sign-up.errors";
-import { UseCaseHandler } from "src/lib/use-case/use-case";
+import { UseCaseHandler } from "../../../../lib/use-case/use-case";
 import { JWT_CONFIG } from "../../infrastructure/jwt/jwt.config";
 import { SignUpParams, SignUpResult } from "./sign-up.types";
 
@@ -50,11 +50,14 @@ export class SignUpHandler implements UseCaseHandler<
     const user = createUserResult.value;
 
     const signAccessTokenResult = await fromAsyncThrowable(async () =>
-      this.jwtService.signAsync(params, {
-        secret: JWT_CONFIG.JWT_REFRESH_KEY,
-        expiresIn: JWT_CONFIG.JWT_REFRESH_EXP,
-        algorithm: "HS256",
-      }),
+      this.jwtService.signAsync(
+        { userId: user.id },
+        {
+          secret: JWT_CONFIG.JWT_ACCESS_KEY,
+          expiresIn: JWT_CONFIG.JWT_ACCESS_EXP,
+          algorithm: "HS256",
+        },
+      ),
     )();
     if (signAccessTokenResult.isErr()) {
       return err("SIGN_UP_GENERATE_TOKEN_ERROR");

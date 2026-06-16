@@ -8,15 +8,13 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
-import { CurrentUser } from '../../auth/presentation/guards/current-user.decorator';
-import {
-  AuthenticatedUser,
-  JwtAuthGuard,
-} from '../../auth/presentation/guards/jwt-auth.guard';
+import { Jwt } from '../../auth/infrastructure/jwt/jwt.decorator';
+import { JwtGuard } from '../../auth/presentation/guards/jwt-auth.guard';
+import { JwtPayload } from '../../auth/domain/jwt-payload';
 import { FollowsPresentationService } from './follows-presentation.service';
 
 @Controller('follows')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtGuard)
 export class FollowsController {
   constructor(
     private readonly followsPresentationService: FollowsPresentationService,
@@ -25,18 +23,18 @@ export class FollowsController {
   @Post(':followeeId')
   @HttpCode(HttpStatus.NO_CONTENT)
   follow(
-    @CurrentUser() user: AuthenticatedUser,
+    @Jwt() jwt: JwtPayload,
     @Param('followeeId', ParseUUIDPipe) followeeId: string,
   ): Promise<void> {
-    return this.followsPresentationService.follow(user.userId, followeeId);
+    return this.followsPresentationService.follow(jwt.userId, followeeId);
   }
 
   @Delete(':followeeId')
   @HttpCode(HttpStatus.NO_CONTENT)
   unfollow(
-    @CurrentUser() user: AuthenticatedUser,
+    @Jwt() jwt: JwtPayload,
     @Param('followeeId', ParseUUIDPipe) followeeId: string,
   ): Promise<void> {
-    return this.followsPresentationService.unfollow(user.userId, followeeId);
+    return this.followsPresentationService.unfollow(jwt.userId, followeeId);
   }
 }

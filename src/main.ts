@@ -1,3 +1,6 @@
+// Load .env into process.env BEFORE any module is imported, so the eager
+// JWT_CONFIG validation (validateEnv at import time) sees the variables.
+import 'dotenv/config';
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
